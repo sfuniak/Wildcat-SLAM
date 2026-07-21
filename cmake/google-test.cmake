@@ -1,6 +1,6 @@
 function(add_test_library_srcs ARG_SRC)
     add_library(${TEST_LIB} ${ARG_SRC})
-    target_link_libraries(${TEST_LIB} gtest ${TEST_EXECUTABLE_COMMON_DEPS})
+    target_link_libraries(${TEST_LIB} GTest::gtest ${TEST_EXECUTABLE_COMMON_DEPS})
 endfunction()
 
 function(google_test NAME ARG_SRC)
@@ -10,16 +10,8 @@ function(google_test NAME ARG_SRC)
     target_include_directories("${NAME}" SYSTEM PRIVATE
             "${GMOCK_INCLUDE_DIRS}")
     # todo use GMOCK_LIBRARIES, not gmock_main
-    target_link_libraries("${NAME}" PUBLIC gmock_main)
-
-    if (CATKIN_ENABLE_TESTING)
-        add_test(${NAME} ${CATKIN_DEVEL_PREFIX}/${CATKIN_PACKAGE_BIN_DESTINATION}/${NAME})
-        # add_test(${NAME} ${NAME} WORKING_DIRECTORY ${CATKIN_DEVEL_PREFIX}/${CATKIN_PACKAGE_BIN_DESTINATION})
-        # get_test_property(${PROJECT_NAME} WORKING_DIRECTORY test_dir)
-        # message("My test's working directory: ${test_dir}")
-    else()
-        add_test(${NAME} ${NAME})
-    endif()
+    target_link_libraries("${NAME}" PUBLIC GTest::gmock_main)
+    add_test(NAME ${NAME} COMMAND ${NAME})
 endfunction()
 
 function(enable_automatic_test_and_benchmark)
@@ -44,7 +36,7 @@ function(enable_automatic_test_and_benchmark)
         # Replace slashes as required for CMP0037.
         string(REPLACE "/" "." TEST_TARGET_NAME "${DIR}/${FIL_WE}")
         google_test("${TEST_TARGET_NAME}" ${ABS_FIL})
-        target_link_libraries("${TEST_TARGET_NAME}" PUBLIC ${TEST_LIB} glog benchmark)
+        target_link_libraries("${TEST_TARGET_NAME}" PUBLIC ${TEST_LIB} glog::glog benchmark::benchmark)
     endforeach ()
 endfunction()
 

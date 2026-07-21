@@ -16,15 +16,6 @@ endif()
 
 
 #################### Find dependencies begin ####################
-find_package(catkin REQUIRED COMPONENTS
-    geometry_msgs
-    nav_msgs
-    sensor_msgs
-    roscpp
-    rospy
-    rosbag
-    std_msgs
-    tf)
 find_package(PCL REQUIRED)
 find_package(Ceres REQUIRED)
 find_package(Protobuf REQUIRED)
@@ -32,8 +23,10 @@ if (Protobuf_VERBOSE)
     message(STATUS "Using Protocol Buffers ${protobuf_VERSION}")
 endif ()
 find_package(fmt REQUIRED)
-
-add_subdirectory(3rd-party/abseil-cpp)
+find_package(absl REQUIRED)
+find_package(GTest REQUIRED)
+find_package(glog REQUIRED)
+find_package(benchmark REQUIRED)
 #################### Find dependencies end ####################
 
 
@@ -68,15 +61,9 @@ set_source_files_properties(${ALL_PROTO_SRCS} ${ALL_PROTO_HDRS} PROPERTIES GENER
 
 
 
-catkin_package(
-    CATKIN_DEPENDS geometry_msgs nav_msgs roscpp rospy std_msgs
-    DEPENDS EIGEN3 PCL
-)
-
 include_directories(
     src
     3rd-party/Sophus-1.22.10
-    ${catkin_INCLUDE_DIRS}
     ${PCL_INCLUDE_DIRS}
     ${CERES_INCLUDE_DIRS}
     ${Protobuf_INCLUDE_DIRS}
@@ -86,19 +73,12 @@ include_directories(
 set(
     PROJECT_SRCS
     src/common/utils.cc
-    src/common/msg_conversion.cc
     src/common/time.cc
     src/common/histogram.cc
-    src/odometry/lidar_odometry.cc
-    src/odometry/surfel_extraction.cc
     src/odometry/knn_surfel_matcher.cc
 )
 list(APPEND PROJECT_SRCS ${ALL_PROTO_SRCS})
 
-add_executable(wildcat_slam_node
-    src/wildcat_slam_node.cc
-    ${PROJECT_SRCS}
-)
 set(
     TEST_EXECUTABLE_COMMON_DEPS
     absl::strings
@@ -107,15 +87,15 @@ set(
     absl::variant
     absl::synchronization
     absl::flat_hash_set
-    fmt
-    glog
-    ${catkin_LIBRARIES}
+    fmt::fmt
+    glog::glog
     ${CERES_LIBRARIES}
+    ${PCL_LIBRARIES}
+    ${Protobuf_LIBRARIES}
 )
 
-target_link_libraries(wildcat_slam_node ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${Protobuf_LIBRARIES} ${TEST_EXECUTABLE_COMMON_DEPS})
-
 # message("testkk " ${PROJECT_SRCS})
+enable_testing()
 include(cmake/google-test.cmake)
 set(TEST_LIB wildcat_core)
 add_test_library_srcs("${PROJECT_SRCS}")
