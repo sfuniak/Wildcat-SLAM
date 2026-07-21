@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ceres/ceres.h>
+#include <array>
 #include <deque>
 #include <optional>
 
@@ -28,6 +29,11 @@ class LidarOdometry {
     std::vector<SurfelEstimate> surfels;
   };
 
+  struct TimingAverages {
+    std::array<double, 6> stage_seconds{};
+    std::size_t sweep_count = 0;
+  };
+
   LidarOdometry();
 
   /**
@@ -45,6 +51,7 @@ class LidarOdometry {
   std::optional<PoseEstimate> LatestPose() const;
   std::optional<StateSnapshot> Snapshot() const;
   int SweepCount() const { return sweep_id_; }
+  TimingAverages GetTimingAverages() const;
 
  private:
   /**
@@ -84,4 +91,5 @@ class LidarOdometry {
   std::deque<hilti_ros::Point> points_buff_;
 
   int sweep_id_ = 0;
+  std::array<double, 6> stage_time_totals_{};
 };

@@ -4,6 +4,7 @@
 
 #include <absl/container/flat_hash_map.h>
 #include <ceres/ceres.h>
+#include <chrono>
 #include <glog/logging.h>
 #include <pcl/io/ply_io.h>
 
@@ -505,28 +506,45 @@ void LidarOdometry::AddLidarScan(const pcl::PointCloud<hilti_ros::Point>::Ptr &m
     // LOG(INFO) << "Waiting to construct a sweep: " << points_buff_.back().time - points_buff_.front().time;
     return;
   }
+  using Clock = std::chrono::steady_clock;
+  const auto elapsed_seconds = [](Clock::time_point start) {
+    return std::chrono::duration<double>(Clock::now() - start).count();
+  };
+  std::array<double, 6> stage_times{};
+  auto stage_start = Clock::now();
+  stage_times[0] = elapsed_seconds(stage_start);
 
   // 2. integrate IMU poses in windows
+  stage_start = Clock::now();
   PredictImuStatesAndSampleStates(sweep_endtime);
   sweep_endtime = sample_states_sld_win_.back()->timestamp;  // todo here we can make sure all points/surfels are before sweep_endtime
+  stage_times[1] = elapsed_seconds(stage_start);
 
+  stage_start = Clock::now();
   BuildSweep(points_buff_, sweep_endtime, sweep);
+  stage_times[0] += elapsed_seconds(stage_start);
   LOG(INFO) << std::fixed << std::setprecision(6) << "Build sweep " << sweep_id_ << " with points_" << sweep.size() << "[" << sweep.front().time << "," << sweep.back().time << "] by sweep_endtime " << sweep_endtime;
 
   // 3. undistort sweep by IMU poses
+  stage_start = Clock::now();
   std::vector<hilti_ros::Point> sweep_undistorted;
   UndistortSweep(sweep, imu_states_sld_win_, sweep_undistorted);
+  stage_times[2] = elapsed_seconds(stage_start);
 
   // 4. extract surfels and add to windows, the first time surfels will be add to global map
+  stage_start = Clock::now();
   std::deque<Surfel::Ptr> surfels_sweep;
   GlobalMap               map;
   BuildSurfels(sweep_undistorted, surfels_sweep, map);
   surfels_sld_win_.insert(surfels_sld_win_.end(), surfels_sweep.begin(), surfels_sweep.end());
   UpdateSurfelPoses(imu_states_sld_win_, surfels_sld_win_);
+  stage_times[3] = elapsed_seconds(stage_start);
 
   for (int iter_num = 0; iter_num < config_.outer_iter_num_max; ++iter_num) {
     std::vector<SurfelCorrespondence> surfel_corrs_sld, surfel_corrs_fix;
 
+    // 5. match surfels in windows
+    stage_start = Clock::now();
     KnnSurfelMatcher surfel_matcher_sld_win;
     surfel_matcher_sld_win.BuildIndex(surfels_sld_win_);
     surfel_matcher_sld_win.Match(surfels_sld_win_, surfel_corrs_sld);
@@ -534,8 +552,10 @@ void LidarOdometry::AddLidarScan(const pcl::PointCloud<hilti_ros::Point>::Ptr &m
     KnnSurfelMatcher surfel_matcher_fix_win;
     surfel_matcher_fix_win.BuildIndex(surfels_fix_win_);
     surfel_matcher_fix_win.Match(surfels_sld_win_, surfel_corrs_fix);
+    stage_times[4] += elapsed_seconds(stage_start);
 
-    // 5. sovle poses in windows
+    // 6. solve poses in windows
+    stage_start = Clock::now();
     ceres::Problem                      problem;
     std::vector<ceres::ResidualBlockId> surfel_sld_win_residual_ids, surfel_fix_win_residual_ids, imu_residual_ids;
     BuildSldWinLidarResiduals(surfel_corrs_sld, problem, surfel_sld_win_residual_ids);
@@ -567,6 +587,7 @@ void LidarOdometry::AddLidarScan(const pcl::PointCloud<hilti_ros::Point>::Ptr &m
     PrintSurfelResiduals(surfel_fix_win_residual_ids, problem, "Fixed Window");
     PrintImuResiduals(imu_residual_ids, problem);
     PrintSampleStates(sample_states_sld_win_);
+    stage_times[5] += elapsed_seconds(stage_start);
   }
 
   ShrinkToFit(
@@ -577,6 +598,9 @@ void LidarOdometry::AddLidarScan(const pcl::PointCloud<hilti_ros::Point>::Ptr &m
       config_.sliding_window_duration,
       config_.fixed_window_duration);
 
+  for (std::size_t stage = 0; stage < stage_times.size(); ++stage) {
+    stage_time_totals_[stage] += stage_times[stage];
+  }
   ++sweep_id_;
 }
 
@@ -587,6 +611,18 @@ void LidarOdometry::AddImuData(const ImuData &msg) {
 }
 
 LidarOdometry::LidarOdometry() = default;
+
+LidarOdometry::TimingAverages LidarOdometry::GetTimingAverages() const {
+  TimingAverages averages;
+  averages.sweep_count = static_cast<std::size_t>(sweep_id_);
+  if (averages.sweep_count == 0) {
+    return averages;
+  }
+  for (std::size_t stage = 0; stage < stage_time_totals_.size(); ++stage) {
+    averages.stage_seconds[stage] = stage_time_totals_[stage] / averages.sweep_count;
+  }
+  return averages;
+}
 
 std::optional<LidarOdometry::PoseEstimate> LidarOdometry::LatestPose() const {
   if (sample_states_sld_win_.empty()) {

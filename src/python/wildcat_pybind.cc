@@ -137,6 +137,18 @@ class WildcatProcessor {
 
   int sweep_count() const { return odometry_->SweepCount(); }
 
+  py::dict timing_averages() const {
+    const auto averages = odometry_->GetTimingAverages();
+    py::dict result;
+    result["collect_scan_to_sweep"] = averages.stage_seconds[0];
+    result["integrate_imu_poses"] = averages.stage_seconds[1];
+    result["undistort_sweep"] = averages.stage_seconds[2];
+    result["extract_surfels"] = averages.stage_seconds[3];
+    result["match_surfels"] = averages.stage_seconds[4];
+    result["solve_poses"] = averages.stage_seconds[5];
+    return result;
+  }
+
  private:
   std::shared_ptr<LidarOdometry> odometry_;
   ImuResampler imu_resampler_;
@@ -152,5 +164,6 @@ PYBIND11_MODULE(wildcat_slam, module) {
            py::arg("xyz"), py::arg("intensity"), py::arg("timestamp"), py::arg("ring"))
       .def("snapshot", &WildcatProcessor::snapshot)
       .def_property_readonly("latest_pose", &WildcatProcessor::latest_pose)
+      .def_property_readonly("timing_averages", &WildcatProcessor::timing_averages)
       .def_property_readonly("sweep_count", &WildcatProcessor::sweep_count);
 }

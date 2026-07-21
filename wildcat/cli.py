@@ -187,6 +187,11 @@ def main() -> None:
                 else:
                     x, y, z = latest_pose["position"]
                     print(f"time={lidar_time:.9f} position=({x:.3f}, {y:.3f}, {z:.3f})")
+                timings = processor.timing_averages
+                print(
+                    "running average timings: "
+                    + ", ".join(f"{stage}={seconds * 1000:.3f} ms" for stage, seconds in timings.items())
+                )
                 if visualizer is not None:
                     snapshot = processor.snapshot()
                     if snapshot is not None:
