@@ -1,8 +1,6 @@
 #include <pcl/io/ply_io.h>
 
 #include "absl/container/flat_hash_map.h"
-#include "ros/publisher.h"
-#include "ros/rate.h"
 #include "surfel_extraction.h"
 
 namespace {
@@ -355,80 +353,4 @@ void makeRightHanded(Matrix3d &eigenvectors, Vector3d &eigenvalues) {
   } else {
     eigenvectors << c0, c1, c2;
   }
-}
-
-void PubSurfels(std::deque<Surfel::Ptr> surfels,
-                const ros::Publisher   &plane_map_pub) {
-  visualization_msgs::MarkerArray voxel_planes;
-
-  for (auto &surfel : surfels) {
-    Vector3d eigenvalues(Vector3d::Identity());
-    Matrix3d eigenvectors(Matrix3d::Zero());
-
-    // NOTE: The SelfAdjointEigenSolver only references the lower triangular part of the covariance matrix
-    // FIXME: Should we use Eigen's pseudoEigenvectors() ?
-    Eigen::SelfAdjointEigenSolver<Matrix3d> eigensolver(surfel->GetCovarianceInWorld());
-    // Compute eigenvectors and eigenvalues
-    if (eigensolver.info() == Eigen::Success) {
-      eigenvalues  = eigensolver.eigenvalues();
-      eigenvectors = eigensolver.eigenvectors();
-    } else {
-      ROS_WARN_THROTTLE(1, "failed to compute eigen vectors/values for position. Is the covariance matrix correct?");
-      eigenvalues  = Vector3d::Zero();  // Setting the scale to zero will hide it on the screen
-      eigenvectors = Matrix3d::Identity();
-    }
-
-    // Be sure we have a right-handed orientation system
-    makeRightHanded(eigenvectors, eigenvalues);
-
-    // Define the rotation
-    Matrix3d rot;
-    rot << eigenvectors(0, 0), eigenvectors(0, 1), eigenvectors(0, 2),
-        eigenvectors(1, 0), eigenvectors(1, 1), eigenvectors(1, 2),
-        eigenvectors(2, 0), eigenvectors(2, 1), eigenvectors(2, 2);
-    Quaterniond qq{rot};
-
-    auto center = surfel->GetCenterInWorld();
-    auto norm   = surfel->GetNormInWorld();
-
-    static int                 id = 0;
-    visualization_msgs::Marker plane;
-    plane.header.frame_id = "world";
-    plane.header.stamp    = ros::Time();
-    plane.ns              = "plane";
-    plane.id              = ++id;
-    plane.type            = visualization_msgs::Marker::SPHERE;
-    plane.action          = visualization_msgs::Marker::ADD;
-    plane.pose.position.x = center[0];
-    plane.pose.position.y = center[1];
-    plane.pose.position.z = center[2];
-    geometry_msgs::Quaternion q;
-    q.w                    = qq.w();
-    q.x                    = qq.x();
-    q.y                    = qq.y();
-    q.z                    = qq.z();
-    plane.pose.orientation = q;
-    plane.scale.x          = 3 * sqrt(eigenvalues[0]);
-    plane.scale.y          = 3 * sqrt(eigenvalues[1]);
-    plane.scale.z          = 3 * sqrt(eigenvalues[2]);
-    plane.color.a          = 1;
-    plane.color.r          = (norm[0] + 1) / 2;
-    plane.color.g          = (norm[1] + 1) / 2;
-    plane.color.b          = (norm[2] + 1) / 2;
-    plane.lifetime         = ros::Duration();
-    voxel_planes.markers.push_back(plane);
-  }
-
-  {
-    // delete all history markers
-    auto marker_array_msg = visualization_msgs::MarkerArray();
-    auto marker           = visualization_msgs::Marker();
-    marker.id             = 0;
-    marker.ns             = "plane";
-    marker.action         = visualization_msgs::Marker::DELETEALL;
-    marker_array_msg.markers.push_back(marker);
-    plane_map_pub.publish(marker_array_msg);
-  }
-
-  plane_map_pub.publish(voxel_planes);
 }

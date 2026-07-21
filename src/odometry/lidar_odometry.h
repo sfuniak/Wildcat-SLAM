@@ -1,15 +1,33 @@
 #pragma once
 
 #include <ceres/ceres.h>
-#include <ros/node_handle.h>
-#include <sensor_msgs/PointCloud2.h>
 #include <deque>
+#include <optional>
 
 #include "odometry/lio_config.h"
 #include "surfel_extraction.h"
 
 class LidarOdometry {
  public:
+  struct PoseEstimate {
+    double timestamp;
+    Vector3d position;
+    Quaterniond orientation;
+  };
+
+  struct SurfelEstimate {
+    double timestamp;
+    Vector3d center;
+    Vector3d normal;
+    Matrix3d covariance;
+    bool fixed_window;
+  };
+
+  struct StateSnapshot {
+    PoseEstimate pose;
+    std::vector<SurfelEstimate> surfels;
+  };
+
   LidarOdometry();
 
   /**
@@ -23,6 +41,10 @@ class LidarOdometry {
    *
    */
   void AddLidarScan(const pcl::PointCloud<hilti_ros::Point>::Ptr &msg);
+
+  std::optional<PoseEstimate> LatestPose() const;
+  std::optional<StateSnapshot> Snapshot() const;
+  int SweepCount() const { return sweep_id_; }
 
  private:
   /**
@@ -60,10 +82,6 @@ class LidarOdometry {
 
   std::deque<ImuData>          imu_buff_;
   std::deque<hilti_ros::Point> points_buff_;
-
-  ros::NodeHandle nh_;
-  ros::Publisher  pub_plane_map_;
-  ros::Publisher  pub_scan_in_imu_frame_;
 
   int sweep_id_ = 0;
 };

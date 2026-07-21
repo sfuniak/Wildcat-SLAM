@@ -6,8 +6,6 @@
 #include <ceres/ceres.h>
 #include <glog/logging.h>
 #include <pcl/io/ply_io.h>
-#include <pcl_conversions/pcl_conversions.h>
-#include <tf/transform_broadcaster.h>
 
 #include "common/histogram.h"
 #include "common/utils.h"
@@ -549,14 +547,14 @@ void LidarOdometry::AddLidarScan(const pcl::PointCloud<hilti_ros::Point>::Ptr &m
     PrintImuResiduals(imu_residual_ids, problem);
 
     ceres::Solver::Options option;
-    option.minimizer_progress_to_stdout = true;
+    option.minimizer_progress_to_stdout = false;
     option.linear_solver_type           = ceres::SPARSE_NORMAL_CHOLESKY;
     option.max_num_iterations           = config_.inner_iter_num_max;
     ceres::Solver::Summary summary;
     static auto            g_first_sample_state = sample_states_sld_win_[0];
     if (sample_states_sld_win_[0] == g_first_sample_state) {
       LOG(INFO) << "Optimize with fixing position of the first sample state.";
-      problem.SetParameterization(sample_states_sld_win_[0]->data_cor, new ceres::SubsetParameterization(12, {3, 4, 5}));
+      problem.SetManifold(sample_states_sld_win_[0]->data_cor, new ceres::SubsetManifold(12, {3, 4, 5}));
     }
     ceres::Solve(option, &problem, &summary);
     LOG(INFO) << summary.BriefReport();
@@ -579,28 +577,6 @@ void LidarOdometry::AddLidarScan(const pcl::PointCloud<hilti_ros::Point>::Ptr &m
       config_.sliding_window_duration,
       config_.fixed_window_duration);
 
-  PubSurfels(surfels_sld_win_, pub_plane_map_);
-  {
-    std::vector<hilti_ros::Point> sweep_undistorted_final;
-    UndistortSweep(sweep, imu_states_sld_win_, sweep_undistorted_final);
-    sensor_msgs::PointCloud2          msg;
-    pcl::PointCloud<hilti_ros::Point> cloud;
-    for (auto &e : sweep_undistorted_final) {
-      cloud.push_back(e);
-    }
-    pcl::toROSMsg(cloud, msg);
-    msg.header.stamp.fromSec(cloud.points[0].time);
-    msg.header.frame_id = "world";
-    pub_scan_in_imu_frame_.publish(msg);
-  }
-  {
-    static tf::TransformBroadcaster br;
-    tf::Transform                   transform;
-    transform.setOrigin(tf::Vector3(sample_states_sld_win_.back()->pos[0], sample_states_sld_win_.back()->pos[1], sample_states_sld_win_.back()->pos[2]));
-    transform.setRotation(tf::Quaternion(sample_states_sld_win_.back()->rot.x(), sample_states_sld_win_.back()->rot.y(), sample_states_sld_win_.back()->rot.z(), sample_states_sld_win_.back()->rot.w()));
-    br.sendTransform(tf::StampedTransform(transform, ros::Time().fromSec(sample_states_sld_win_.back()->timestamp), "world", "imu_link"));
-  }
-
   ++sweep_id_;
 }
 
@@ -610,7 +586,36 @@ void LidarOdometry::AddImuData(const ImuData &msg) {
   this->imu_buff_.push_back(msg_new);
 }
 
-LidarOdometry::LidarOdometry() {
-  pub_plane_map_         = nh_.advertise<visualization_msgs::MarkerArray>("/current_planes", 10);
-  pub_scan_in_imu_frame_ = nh_.advertise<sensor_msgs::PointCloud2>("/scan_in_imu_frame", 10);
+LidarOdometry::LidarOdometry() = default;
+
+std::optional<LidarOdometry::PoseEstimate> LidarOdometry::LatestPose() const {
+  if (sample_states_sld_win_.empty()) {
+    return std::nullopt;
+  }
+  const auto &state = sample_states_sld_win_.back();
+  return PoseEstimate{state->timestamp, state->pos, state->rot};
+}
+
+std::optional<LidarOdometry::StateSnapshot> LidarOdometry::Snapshot() const {
+  const auto pose = LatestPose();
+  if (!pose) {
+    return std::nullopt;
+  }
+
+  StateSnapshot snapshot{*pose, {}};
+  snapshot.surfels.reserve(surfels_sld_win_.size() + surfels_fix_win_.size());
+  const auto append_surfels = [&snapshot](const auto &surfels, bool fixed_window) {
+    for (const auto &surfel : surfels) {
+      snapshot.surfels.push_back({
+          surfel->timestamp,
+          surfel->GetCenterInWorld(),
+          surfel->GetNormInWorld(),
+          surfel->GetCovarianceInWorld(),
+          fixed_window,
+      });
+    }
+  };
+  append_surfels(surfels_sld_win_, false);
+  append_surfels(surfels_fix_win_, true);
+  return snapshot;
 }

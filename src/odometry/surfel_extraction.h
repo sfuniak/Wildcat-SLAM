@@ -4,10 +4,6 @@
 #include <absl/container/flat_hash_map.h>
 #include <glog/logging.h>
 #include <pcl/common/io.h>
-#include <ros/publisher.h>
-#include <rosbag/bag.h>
-#include <visualization_msgs/Marker.h>
-#include <visualization_msgs/MarkerArray.h>
 #include <Eigen/Core>
 #include <Eigen/Dense>
 #include <Eigen/StdVector>
@@ -145,11 +141,5 @@ void BuildVoxelMap(const std::vector<PointWithCov>           &input_points,
 void BuildSurfels(const std::vector<hilti_ros::Point> &cloud,
                   std::deque<Surfel::Ptr>             &surfels,
                   GlobalMap                           &map);
-
-void PubPlaneMap(const absl::flat_hash_map<VoxelLoc, OctoTree *> &feat_map,
-                 const ros::Publisher                            &plane_map_pub);
-
-void PubSurfels(std::deque<Surfel::Ptr> surfels,
-                const ros::Publisher   &plane_map_pub);
 
 #endif

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.15)
 cmake_policy(SET CMP0048 NEW)
 project(wildcat_slam VERSION 0.0.1)
 
@@ -6,6 +6,7 @@ project(wildcat_slam VERSION 0.0.1)
 
 #################### Set compiler options begin ####################
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(ABSL_PROPAGATE_CXX_STD ON)
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     set(CMAKE_CXX_FLAGS "-Wthread-safety")
@@ -27,6 +28,9 @@ find_package(absl REQUIRED)
 find_package(GTest REQUIRED)
 find_package(glog REQUIRED)
 find_package(benchmark REQUIRED)
+set(PYBIND11_FINDPYTHON ON)
+find_package(Python COMPONENTS Interpreter Development.Module REQUIRED)
+find_package(pybind11 REQUIRED)
 #################### Find dependencies end ####################
 
 
@@ -76,6 +80,8 @@ set(
     src/common/time.cc
     src/common/histogram.cc
     src/odometry/knn_surfel_matcher.cc
+    src/odometry/lidar_odometry.cc
+    src/odometry/surfel_extraction.cc
 )
 list(APPEND PROJECT_SRCS ${ALL_PROTO_SRCS})
 
@@ -100,3 +106,7 @@ include(cmake/google-test.cmake)
 set(TEST_LIB wildcat_core)
 add_test_library_srcs("${PROJECT_SRCS}")
 enable_automatic_test_and_benchmark()
+
+pybind11_add_module(wildcat_slam src/python/wildcat_pybind.cc)
+target_link_libraries(wildcat_slam PRIVATE wildcat_core ${TEST_EXECUTABLE_COMMON_DEPS})
+install(TARGETS wildcat_slam LIBRARY DESTINATION . RUNTIME DESTINATION .)
