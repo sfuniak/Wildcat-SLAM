@@ -30,11 +30,13 @@ class LidarOdometry {
   };
 
   struct TimingAverages {
-    std::array<double, 6> stage_seconds{};
+    std::array<double, 8> stage_seconds{};
     std::size_t sweep_count = 0;
   };
 
-  LidarOdometry();
+  explicit LidarOdometry(
+      int solver_num_threads = 1,
+      ceres::SparseLinearAlgebraLibraryType sparse_backend = ceres::SUITE_SPARSE);
 
   /**
    * @brief Add raw imu measurements to queue
@@ -91,5 +93,7 @@ class LidarOdometry {
   std::deque<hilti_ros::Point> points_buff_;
 
   int sweep_id_ = 0;
-  std::array<double, 6> stage_time_totals_{};
+  int solver_num_threads_ = 1;
+  ceres::SparseLinearAlgebraLibraryType sparse_backend_ = ceres::SUITE_SPARSE;
+  std::array<double, 8> stage_time_totals_{};
 };

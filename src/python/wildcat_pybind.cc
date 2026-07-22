@@ -11,8 +11,8 @@ namespace py = pybind11;
 
 class WildcatProcessor {
  public:
-  explicit WildcatProcessor(int imu_rate)
-      : odometry_(std::make_shared<LidarOdometry>()), imu_resampler_(imu_rate) {}
+  explicit WildcatProcessor(int imu_rate, int solver_threads, const std::string &sparse_backend)
+      : odometry_(make_odometry(solver_threads, sparse_backend)), imu_resampler_(imu_rate) {}
 
   void add_imu(double timestamp,
                py::array_t<double, py::array::c_style | py::array::forcecast> linear_acceleration,
@@ -145,11 +145,32 @@ class WildcatProcessor {
     result["undistort_sweep"] = averages.stage_seconds[2];
     result["extract_surfels"] = averages.stage_seconds[3];
     result["match_surfels"] = averages.stage_seconds[4];
-    result["solve_poses"] = averages.stage_seconds[5];
+    result["build_residual_graph"] = averages.stage_seconds[5];
+    result["ceres_solve"] = averages.stage_seconds[6];
+    result["update_states"] = averages.stage_seconds[7];
     return result;
   }
 
  private:
+  static std::shared_ptr<LidarOdometry> make_odometry(int solver_threads, const std::string &sparse_backend) {
+    if (solver_threads < 1) {
+      throw std::invalid_argument("solver_threads must be at least 1");
+    }
+    if (sparse_backend == "suite") {
+      return std::make_shared<LidarOdometry>(solver_threads, ceres::SUITE_SPARSE);
+    }
+    if (sparse_backend == "eigen") {
+      return std::make_shared<LidarOdometry>(solver_threads, ceres::EIGEN_SPARSE);
+    }
+    if (sparse_backend == "accelerate") {
+      return std::make_shared<LidarOdometry>(solver_threads, ceres::ACCELERATE_SPARSE);
+    }
+    if (sparse_backend == "cuda") {
+      return std::make_shared<LidarOdometry>(solver_threads, ceres::CUDA_SPARSE);
+    }
+    throw std::invalid_argument("sparse_backend must be one of: suite, eigen, accelerate, cuda");
+  }
+
   std::shared_ptr<LidarOdometry> odometry_;
   ImuResampler imu_resampler_;
 };
@@ -157,7 +178,10 @@ class WildcatProcessor {
 PYBIND11_MODULE(wildcat_slam, module) {
   module.doc() = "Python bindings for the ROS-independent Wildcat SLAM core";
   py::class_<WildcatProcessor>(module, "Processor")
-      .def(py::init<int>(), py::arg("imu_rate") = 200)
+      .def(py::init<int, int, const std::string &>(),
+           py::arg("imu_rate") = 200,
+           py::arg("solver_threads") = 1,
+           py::arg("sparse_backend") = "suite")
       .def("add_imu", &WildcatProcessor::add_imu,
            py::arg("timestamp"), py::arg("linear_acceleration"), py::arg("angular_velocity"))
       .def("add_lidar", &WildcatProcessor::add_lidar,

@@ -53,7 +53,7 @@ class CubicBSplineSampleCorrector {
 };
 
 void PrintSurfelResiduals(const std::vector<ceres::ResidualBlockId> &residual_ids, ceres::Problem &problem, const std::string &window_type) {
-  if (residual_ids.empty()) {
+  if (FLAGS_minloglevel > google::GLOG_INFO || residual_ids.empty()) {
     return;
   }
   std::vector<double>             residuals;
@@ -70,7 +70,7 @@ void PrintSurfelResiduals(const std::vector<ceres::ResidualBlockId> &residual_id
 }
 
 void PrintImuResiduals(const std::vector<ceres::ResidualBlockId> &residual_ids, ceres::Problem &problem) {
-  if (residual_ids.empty()) {
+  if (FLAGS_minloglevel > google::GLOG_INFO || residual_ids.empty()) {
     return;
   }
   std::vector<double>             residuals;
@@ -510,7 +510,7 @@ void LidarOdometry::AddLidarScan(const pcl::PointCloud<hilti_ros::Point>::Ptr &m
   const auto elapsed_seconds = [](Clock::time_point start) {
     return std::chrono::duration<double>(Clock::now() - start).count();
   };
-  std::array<double, 6> stage_times{};
+  std::array<double, 8> stage_times{};
   auto stage_start = Clock::now();
   stage_times[0] = elapsed_seconds(stage_start);
 
@@ -554,7 +554,7 @@ void LidarOdometry::AddLidarScan(const pcl::PointCloud<hilti_ros::Point>::Ptr &m
     surfel_matcher_fix_win.Match(surfels_sld_win_, surfel_corrs_fix);
     stage_times[4] += elapsed_seconds(stage_start);
 
-    // 6. solve poses in windows
+    // 6. build residual graph
     stage_start = Clock::now();
     ceres::Problem                      problem;
     std::vector<ceres::ResidualBlockId> surfel_sld_win_residual_ids, surfel_fix_win_residual_ids, imu_residual_ids;
@@ -569,25 +569,34 @@ void LidarOdometry::AddLidarScan(const pcl::PointCloud<hilti_ros::Point>::Ptr &m
     ceres::Solver::Options option;
     option.minimizer_progress_to_stdout = false;
     option.linear_solver_type           = ceres::SPARSE_NORMAL_CHOLESKY;
+    option.sparse_linear_algebra_library_type = sparse_backend_;
     option.max_num_iterations           = config_.inner_iter_num_max;
+    option.num_threads                  = solver_num_threads_;
     ceres::Solver::Summary summary;
     static auto            g_first_sample_state = sample_states_sld_win_[0];
     if (sample_states_sld_win_[0] == g_first_sample_state) {
       LOG(INFO) << "Optimize with fixing position of the first sample state.";
       problem.SetManifold(sample_states_sld_win_[0]->data_cor, new ceres::SubsetManifold(12, {3, 4, 5}));
     }
-    ceres::Solve(option, &problem, &summary);
-    LOG(INFO) << summary.BriefReport();
+    stage_times[5] += elapsed_seconds(stage_start);
 
+    // 7. solve poses in windows
+    stage_start = Clock::now();
+    ceres::Solve(option, &problem, &summary);
+    LOG(INFO) << summary.FullReport();
+    stage_times[6] += elapsed_seconds(stage_start);
+
+    // 8. update states
+    stage_start = Clock::now();
     UpdateImuPoses(sample_states_sld_win_, imu_states_sld_win_);
     UpdateSurfelPoses(imu_states_sld_win_, surfels_sld_win_);
     UpdateSamplePoses(sample_states_sld_win_);
+    stage_times[7] += elapsed_seconds(stage_start);
 
     PrintSurfelResiduals(surfel_sld_win_residual_ids, problem, "Sliding Window");
     PrintSurfelResiduals(surfel_fix_win_residual_ids, problem, "Fixed Window");
     PrintImuResiduals(imu_residual_ids, problem);
     PrintSampleStates(sample_states_sld_win_);
-    stage_times[5] += elapsed_seconds(stage_start);
   }
 
   ShrinkToFit(
@@ -610,7 +619,13 @@ void LidarOdometry::AddImuData(const ImuData &msg) {
   this->imu_buff_.push_back(msg_new);
 }
 
-LidarOdometry::LidarOdometry() = default;
+LidarOdometry::LidarOdometry(
+    int solver_num_threads,
+    ceres::SparseLinearAlgebraLibraryType sparse_backend)
+    : solver_num_threads_(solver_num_threads),
+      sparse_backend_(sparse_backend) {
+  CHECK_GT(solver_num_threads_, 0);
+}
 
 LidarOdometry::TimingAverages LidarOdometry::GetTimingAverages() const {
   TimingAverages averages;

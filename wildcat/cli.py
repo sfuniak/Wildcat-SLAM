@@ -130,6 +130,18 @@ def main() -> None:
     parser.add_argument("--imu-topic", default="/alphasense/imu")
     parser.add_argument("--lidar-topic", default="/hesai/pandar")
     parser.add_argument("--imu-rate", type=int, default=200)
+    parser.add_argument(
+        "--solver-threads",
+        type=int,
+        default=1,
+        help="Number of Ceres residual/Jacobian evaluation threads (default: 1)",
+    )
+    parser.add_argument(
+        "--sparse",
+        choices=("suite", "eigen", "accelerate", "cuda"),
+        default="suite",
+        help="Ceres sparse linear algebra backend (default: suite)",
+    )
     parser.add_argument("--point-time-field", default="timestamp")
     parser.add_argument("--point-time-mode", choices=("auto", "absolute", "relative"), default="auto")
     parser.add_argument("--visualize", action="store_true", help="Stream poses and surfels to Rerun")
@@ -137,7 +149,14 @@ def main() -> None:
 
     import wildcat_slam  # pylint: disable=import-error,import-outside-toplevel
 
-    processor = wildcat_slam.Processor(args.imu_rate)
+    if args.solver_threads < 1:
+        parser.error("--solver-threads must be at least 1")
+
+    processor = wildcat_slam.Processor(
+        args.imu_rate,
+        args.solver_threads,
+        args.sparse,
+    )
     visualizer = RerunVisualizer() if args.visualize else None
     wanted_topics = {args.imu_topic, args.lidar_topic}
     with AnyReader([args.bag]) as reader:
