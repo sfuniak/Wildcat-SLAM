@@ -137,10 +137,10 @@ def main() -> None:
         help="Number of Ceres residual/Jacobian evaluation threads (default: 1)",
     )
     parser.add_argument(
-        "--sparse",
-        choices=("suite", "eigen", "accelerate", "cuda"),
+        "--solver",
+        choices=("suite", "eigen", "accelerate", "cuda", "dense-lapack", "dense-cuda"),
         default="suite",
-        help="Ceres sparse linear algebra backend (default: suite)",
+        help="Ceres linear solver backend (default: suite)",
     )
     parser.add_argument("--point-time-field", default="timestamp")
     parser.add_argument("--point-time-mode", choices=("auto", "absolute", "relative"), default="auto")
@@ -155,7 +155,7 @@ def main() -> None:
     processor = wildcat_slam.Processor(
         args.imu_rate,
         args.solver_threads,
-        args.sparse,
+        args.solver,
     )
     visualizer = RerunVisualizer() if args.visualize else None
     wanted_topics = {args.imu_topic, args.lidar_topic}

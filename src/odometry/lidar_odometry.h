@@ -10,6 +10,15 @@
 
 class LidarOdometry {
  public:
+  enum class SolverType {
+    SuiteSparse,
+    EigenSparse,
+    AccelerateSparse,
+    CudaSparse,
+    DenseLapack,
+    DenseCuda,
+  };
+
   struct PoseEstimate {
     double timestamp;
     Vector3d position;
@@ -34,9 +43,7 @@ class LidarOdometry {
     std::size_t sweep_count = 0;
   };
 
-  explicit LidarOdometry(
-      int solver_num_threads = 1,
-      ceres::SparseLinearAlgebraLibraryType sparse_backend = ceres::SUITE_SPARSE);
+  explicit LidarOdometry(int solver_num_threads = 1, SolverType solver_type = SolverType::SuiteSparse);
 
   /**
    * @brief Add raw imu measurements to queue
@@ -94,6 +101,6 @@ class LidarOdometry {
 
   int sweep_id_ = 0;
   int solver_num_threads_ = 1;
-  ceres::SparseLinearAlgebraLibraryType sparse_backend_ = ceres::SUITE_SPARSE;
+  SolverType solver_type_ = SolverType::SuiteSparse;
   std::array<double, 8> stage_time_totals_{};
 };

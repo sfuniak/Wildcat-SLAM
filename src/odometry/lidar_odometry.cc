@@ -568,8 +568,32 @@ void LidarOdometry::AddLidarScan(const pcl::PointCloud<hilti_ros::Point>::Ptr &m
 
     ceres::Solver::Options option;
     option.minimizer_progress_to_stdout = false;
-    option.linear_solver_type           = ceres::SPARSE_NORMAL_CHOLESKY;
-    option.sparse_linear_algebra_library_type = sparse_backend_;
+    switch (solver_type_) {
+      case SolverType::SuiteSparse:
+        option.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
+        option.sparse_linear_algebra_library_type = ceres::SUITE_SPARSE;
+        break;
+      case SolverType::EigenSparse:
+        option.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
+        option.sparse_linear_algebra_library_type = ceres::EIGEN_SPARSE;
+        break;
+      case SolverType::AccelerateSparse:
+        option.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
+        option.sparse_linear_algebra_library_type = ceres::ACCELERATE_SPARSE;
+        break;
+      case SolverType::CudaSparse:
+        option.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
+        option.sparse_linear_algebra_library_type = ceres::CUDA_SPARSE;
+        break;
+      case SolverType::DenseLapack:
+        option.linear_solver_type = ceres::DENSE_NORMAL_CHOLESKY;
+        option.dense_linear_algebra_library_type = ceres::LAPACK;
+        break;
+      case SolverType::DenseCuda:
+        option.linear_solver_type = ceres::DENSE_NORMAL_CHOLESKY;
+        option.dense_linear_algebra_library_type = ceres::CUDA;
+        break;
+    }
     option.max_num_iterations           = config_.inner_iter_num_max;
     option.num_threads                  = solver_num_threads_;
     ceres::Solver::Summary summary;
@@ -619,11 +643,9 @@ void LidarOdometry::AddImuData(const ImuData &msg) {
   this->imu_buff_.push_back(msg_new);
 }
 
-LidarOdometry::LidarOdometry(
-    int solver_num_threads,
-    ceres::SparseLinearAlgebraLibraryType sparse_backend)
+LidarOdometry::LidarOdometry(int solver_num_threads, SolverType solver_type)
     : solver_num_threads_(solver_num_threads),
-      sparse_backend_(sparse_backend) {
+      solver_type_(solver_type) {
   CHECK_GT(solver_num_threads_, 0);
 }
 
