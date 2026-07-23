@@ -243,7 +243,8 @@ void ShrinkToFit(std::deque<SampleState::Ptr> &sample_states,
     surfels_fix_win.push_front(surfels_sld_win.front());
     surfels_sld_win.pop_front();
   }
-  while (surfels_fix_win.back()->timestamp - surfels_fix_win.back()->timestamp > fix_win_duration) {
+  while (!surfels_fix_win.empty() &&
+         surfels_fix_win.front()->timestamp - surfels_fix_win.back()->timestamp > fix_win_duration) {
     surfels_fix_win.pop_back();
   }
 }
