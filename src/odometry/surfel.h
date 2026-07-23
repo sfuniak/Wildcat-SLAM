@@ -10,11 +10,12 @@ struct SampleState {
   typedef std::shared_ptr<SampleState> Ptr;
 
   double               timestamp;
-  double               data_cor[12] = {0};  // q, t, bg, ba
-  Eigen::Map<Vector3d> rot_cor{data_cor + 0};
-  Eigen::Map<Vector3d> pos_cor{data_cor + 3};
-  Eigen::Map<Vector3d> bg{data_cor + 6};
-  Eigen::Map<Vector3d> ba{data_cor + 9};
+  double               pose_cor[6] = {0};  // rotation, translation
+  double               biases[6]   = {0};  // gyroscope, accelerometer
+  Eigen::Map<Vector3d> rot_cor{pose_cor + 0};
+  Eigen::Map<Vector3d> pos_cor{pose_cor + 3};
+  Eigen::Map<Vector3d> bg{biases + 0};
+  Eigen::Map<Vector3d> ba{biases + 3};
 
   Vector3d grav;
 

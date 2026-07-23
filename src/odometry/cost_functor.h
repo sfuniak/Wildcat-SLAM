@@ -13,7 +13,7 @@
  * 2. s1 s2 are not in adjacent sampled intervals
  *
  */
-struct SurfelMatchUnaryFactor : public ceres::SizedCostFunction<1, 12, 12> {
+struct SurfelMatchUnaryFactor : public ceres::SizedCostFunction<1, 6, 6> {
   SurfelMatchUnaryFactor(
       std::shared_ptr<Surfel>      s1,
       std::shared_ptr<Surfel>      s2,
@@ -39,18 +39,18 @@ struct SurfelMatchUnaryFactor : public ceres::SizedCostFunction<1, 12, 12> {
     residuals[0] = weight_ * norm_.dot(s1_->GetCenterInWorld() - Exp(r_s2) * s2_->rot * s2_->CenterInBody() - t_s2 - s2_->pos);
 
     if (jacobians) {
-      Eigen::Matrix<double, 1, 12> jacobian_s2;
+      Eigen::Matrix<double, 1, 6> jacobian_s2;
       jacobian_s2.setZero();
       jacobian_s2.block<1, 3>(0, 0) = weight_ * norm_.transpose() * Exp(r_s2).matrix() * Hat(s2_->rot * s2_->CenterInBody()) * Jr(r_s2);
       jacobian_s2.block<1, 3>(0, 3) = -weight_ * norm_.transpose();
 
       if (jacobians[0]) {
-        Eigen::Map<Eigen::Matrix<double, 1, 12, Eigen::RowMajor>> jacobian_sp2l{jacobians[0]};
+        Eigen::Map<Eigen::Matrix<double, 1, 6, Eigen::RowMajor>> jacobian_sp2l{jacobians[0]};
         jacobian_sp2l = jacobian_s2 * (1 - factor2);
       }
 
       if (jacobians[1]) {
-        Eigen::Map<Eigen::Matrix<double, 1, 12, Eigen::RowMajor>> jacobian_sp2r{jacobians[1]};
+        Eigen::Map<Eigen::Matrix<double, 1, 6, Eigen::RowMajor>> jacobian_sp2r{jacobians[1]};
         jacobian_sp2r = jacobian_s2 * factor2;
       }
     }
@@ -74,17 +74,17 @@ struct SurfelMatchBinaryModeTraits {
 
 template <>
 struct SurfelMatchBinaryModeTraits<0> {
-  using type = ceres::SizedCostFunction<1, 12, 12, 12, 12>;
+  using type = ceres::SizedCostFunction<1, 6, 6, 6, 6>;
 };
 
 template <>
 struct SurfelMatchBinaryModeTraits<1> {
-  using type = ceres::SizedCostFunction<1, 12, 12, 12>;
+  using type = ceres::SizedCostFunction<1, 6, 6, 6>;
 };
 
 template <>
 struct SurfelMatchBinaryModeTraits<2> {
-  using type = ceres::SizedCostFunction<1, 12, 12>;
+  using type = ceres::SizedCostFunction<1, 6, 6>;
 };
 
 /**
@@ -144,33 +144,33 @@ struct SurfelMatchBinaryFactor : public TMode {
       double *sp1l_jacobian_ptr, *sp1r_jacobian_ptr, *sp2l_jacobian_ptr, *sp2r_jacobian_ptr;
       DispatchPtr(jacobians, sp1l_jacobian_ptr, sp1r_jacobian_ptr, sp2l_jacobian_ptr, sp2r_jacobian_ptr);
 
-      Eigen::Matrix<double, 1, 12> jacobian_s1;
+      Eigen::Matrix<double, 1, 6> jacobian_s1;
       jacobian_s1.setZero();
       jacobian_s1.block<1, 3>(0, 0) = -weight_ * norm_.transpose() * Exp(r_s1).matrix() * Hat(s1_->rot * s1_->CenterInBody()) * Jr(r_s1);
       jacobian_s1.block<1, 3>(0, 3) = weight_ * norm_.transpose();
 
       if (sp1l_jacobian_ptr) {
-        Eigen::Map<Eigen::Matrix<double, 1, 12, Eigen::RowMajor>> jacobian_sp1l{sp1l_jacobian_ptr};
+        Eigen::Map<Eigen::Matrix<double, 1, 6, Eigen::RowMajor>> jacobian_sp1l{sp1l_jacobian_ptr};
         jacobian_sp1l = jacobian_s1 * (1 - factor1);
       }
 
       if (sp1r_jacobian_ptr) {
-        Eigen::Map<Eigen::Matrix<double, 1, 12, Eigen::RowMajor>> jacobian_sp1r{sp1r_jacobian_ptr};
+        Eigen::Map<Eigen::Matrix<double, 1, 6, Eigen::RowMajor>> jacobian_sp1r{sp1r_jacobian_ptr};
         jacobian_sp1r = jacobian_s1 * factor1;
       }
 
-      Eigen::Matrix<double, 1, 12> jacobian_s2;
+      Eigen::Matrix<double, 1, 6> jacobian_s2;
       jacobian_s2.setZero();
       jacobian_s2.block<1, 3>(0, 0) = weight_ * norm_.transpose() * Exp(r_s2).matrix() * Hat(s2_->rot * s2_->CenterInBody()) * Jr(r_s2);
       jacobian_s2.block<1, 3>(0, 3) = -weight_ * norm_.transpose();
 
       if (sp2l_jacobian_ptr) {
-        Eigen::Map<Eigen::Matrix<double, 1, 12, Eigen::RowMajor>> jacobian_sp2l{sp2l_jacobian_ptr};
+        Eigen::Map<Eigen::Matrix<double, 1, 6, Eigen::RowMajor>> jacobian_sp2l{sp2l_jacobian_ptr};
         jacobian_sp2l = jacobian_s2 * (1 - factor2);
       }
 
       if (sp2r_jacobian_ptr) {
-        Eigen::Map<Eigen::Matrix<double, 1, 12, Eigen::RowMajor>> jacobian_sp2r{sp2r_jacobian_ptr};
+        Eigen::Map<Eigen::Matrix<double, 1, 6, Eigen::RowMajor>> jacobian_sp2r{sp2r_jacobian_ptr};
         jacobian_sp2r = jacobian_s2 * factor2;
       }
     }
@@ -196,9 +196,9 @@ struct SurfelMatchBinaryFactor : public TMode {
       return;
     }
 
-#define SET_JACOBIAN_TO_ZERO(dim)                                                        \
-  if (!jacobians[dim]) {                                                                 \
-    Eigen::Map<Eigen::Matrix<double, 1, 12, Eigen::RowMajor>>{jacobians[dim]}.setZero(); \
+#define SET_JACOBIAN_TO_ZERO(dim)                                                       \
+  if (jacobians[dim]) {                                                                 \
+    Eigen::Map<Eigen::Matrix<double, 1, 6, Eigen::RowMajor>>{jacobians[dim]}.setZero(); \
   }
 
     SET_JACOBIAN_TO_ZERO(0);
@@ -246,12 +246,12 @@ struct ImuFactorModeTraits {
 
 template <>
 struct ImuFactorModeTraits<0> {
-  using type = ceres::SizedCostFunction<12, 12, 12, 12>;
+  using type = ceres::SizedCostFunction<12, 6, 6, 6, 6, 6, 6>;
 };
 
 template <>
 struct ImuFactorModeTraits<1> {
-  using type = ceres::SizedCostFunction<12, 12, 12>;
+  using type = ceres::SizedCostFunction<12, 6, 6, 6, 6>;
 };
 
 /**
@@ -263,6 +263,14 @@ struct ImuFactorModeTraits<1> {
  */
 template <int Mode, typename TMode = typename ImuFactorModeTraits<Mode>::type>
 struct ImuFactor : public TMode {
+  struct StateCorrection {
+    double   timestamp;
+    Vector3d rot;
+    Vector3d pos;
+    Vector3d bg;
+    Vector3d ba;
+  };
+
   ImuFactor(const ImuState& i1, const ImuState& i2, const ImuState& i3,
             double sp1_timestamp, double sp2_timestamp, double sp3_timestamp,
             double weight_gyr, double weight_acc, double weight_bg, double weight_ba,
@@ -270,15 +278,15 @@ struct ImuFactor : public TMode {
   }
 
   bool Evaluate(double const* const* parameters, double* residuals, double** jacobians) const {
-    SampleState sp1 = ToSampleState(parameters[0], sp1_timestamp_);
-    SampleState sp2 = ToSampleState(parameters[1], sp2_timestamp_);
+    StateCorrection sp1 = ToStateCorrection(parameters[0], parameters[1], sp1_timestamp_);
+    StateCorrection sp2 = ToStateCorrection(parameters[2], parameters[3], sp2_timestamp_);
 
     Vector3d r_i1_cor, t_i1_cor, bg_i1, ba_i1;
     Vector3d r_i2_cor, t_i2_cor, bg_i2, ba_i2;
     Vector3d r_i3_cor, t_i3_cor, bg_i3, ba_i3;
 
     if constexpr (Mode == 0) {
-      SampleState sp3 = ToSampleState(parameters[2], sp3_timestamp_);
+      StateCorrection sp3 = ToStateCorrection(parameters[4], parameters[5], sp3_timestamp_);
       ComputeStateCorr(sp1, sp2, sp3, i1_.timestamp, r_i1_cor, t_i1_cor, bg_i1, ba_i1);
       ComputeStateCorr(sp1, sp2, sp3, i2_.timestamp, r_i2_cor, t_i2_cor, bg_i2, ba_i2);
       ComputeStateCorr(sp1, sp2, sp3, i3_.timestamp, r_i3_cor, t_i3_cor, bg_i3, ba_i3);
@@ -321,13 +329,9 @@ struct ImuFactor : public TMode {
       jacobian_tau2.block<3, 3>(3, 3) = -weight_acc_ * (1 / dt_ / dt_) * Matrix3d::Identity();
 
       if constexpr (Mode == 0) {
-        if (!jacobians[0] || !jacobians[1] || !jacobians[2]) {
-          LOG(FATAL) << "unimplemented";
-        }
-
-        Eigen::Map<Eigen::Matrix<double, 12, 12, Eigen::RowMajor>> jacobian_sp1{jacobians[0]};
-        Eigen::Map<Eigen::Matrix<double, 12, 12, Eigen::RowMajor>> jacobian_sp2{jacobians[1]};
-        Eigen::Map<Eigen::Matrix<double, 12, 12, Eigen::RowMajor>> jacobian_sp3{jacobians[2]};
+        Eigen::Matrix<double, 12, 12> jacobian_sp1;
+        Eigen::Matrix<double, 12, 12> jacobian_sp2;
+        Eigen::Matrix<double, 12, 12> jacobian_sp3;
         jacobian_sp1.setZero();
         jacobian_sp2.setZero();
         jacobian_sp3.setZero();
@@ -335,19 +339,20 @@ struct ImuFactor : public TMode {
         DispatchJacobians(jacobian_tau, i1_.timestamp, sp1_timestamp_, sp2_timestamp_, sp3_timestamp_, jacobian_sp1, jacobian_sp2, jacobian_sp3);
         DispatchJacobians(jacobian_tau1, i2_.timestamp, sp1_timestamp_, sp2_timestamp_, sp3_timestamp_, jacobian_sp1, jacobian_sp2, jacobian_sp3);
         DispatchJacobians(jacobian_tau2, i3_.timestamp, sp1_timestamp_, sp2_timestamp_, sp3_timestamp_, jacobian_sp1, jacobian_sp2, jacobian_sp3);
+        WriteStateJacobians(jacobian_sp1, jacobians, 0);
+        WriteStateJacobians(jacobian_sp2, jacobians, 2);
+        WriteStateJacobians(jacobian_sp3, jacobians, 4);
       } else {
-        if (!jacobians[0] || !jacobians[1]) {
-          LOG(FATAL) << "unimplemented";
-        }
-
-        Eigen::Map<Eigen::Matrix<double, 12, 12, Eigen::RowMajor>> jacobian_sp1{jacobians[0]};
-        Eigen::Map<Eigen::Matrix<double, 12, 12, Eigen::RowMajor>> jacobian_sp2{jacobians[1]};
+        Eigen::Matrix<double, 12, 12> jacobian_sp1;
+        Eigen::Matrix<double, 12, 12> jacobian_sp2;
         jacobian_sp1.setZero();
         jacobian_sp2.setZero();
 
         DispatchJacobians(jacobian_tau, i1_.timestamp, sp1_timestamp_, sp2_timestamp_, jacobian_sp1, jacobian_sp2);
         DispatchJacobians(jacobian_tau1, i2_.timestamp, sp1_timestamp_, sp2_timestamp_, jacobian_sp1, jacobian_sp2);
         DispatchJacobians(jacobian_tau2, i3_.timestamp, sp1_timestamp_, sp2_timestamp_, jacobian_sp1, jacobian_sp2);
+        WriteStateJacobians(jacobian_sp1, jacobians, 0);
+        WriteStateJacobians(jacobian_sp2, jacobians, 2);
       }
     }
 
@@ -356,105 +361,113 @@ struct ImuFactor : public TMode {
 
  private:
   void ComputeStateCorr(
-      const SampleState& sp1,
-      const SampleState& sp2,
-      const SampleState& sp3,
-      const double&      timestamp,
-      Vector3d&          r_cor,
-      Vector3d&          t_cor,
-      Vector3d&          bg,
-      Vector3d&          ba) const {
+      const StateCorrection& sp1,
+      const StateCorrection& sp2,
+      const StateCorrection& sp3,
+      const double&          timestamp,
+      Vector3d&              r_cor,
+      Vector3d&              t_cor,
+      Vector3d&              bg,
+      Vector3d&              ba) const {
     CHECK((timestamp >= sp1.timestamp && timestamp < sp2.timestamp) || (timestamp >= sp2.timestamp && timestamp <= sp3.timestamp))
         << std::fixed << std::setprecision(6) << "timestamp: " << timestamp << " sp1: " << sp1.timestamp << " sp2: " << sp2.timestamp << " sp3: " << sp3.timestamp;
 
     bool between_sp1_sp2 = (timestamp >= sp1.timestamp && timestamp < sp2.timestamp);
 
-    const SampleState& spl = between_sp1_sp2 ? sp1 : sp2;
-    const SampleState& spr = between_sp1_sp2 ? sp2 : sp3;
+    const StateCorrection& spl = between_sp1_sp2 ? sp1 : sp2;
+    const StateCorrection& spr = between_sp1_sp2 ? sp2 : sp3;
 
     double factor = (timestamp - spl.timestamp) / (spr.timestamp - spl.timestamp);
-    r_cor         = (1 - factor) * spl.rot_cor + factor * spr.rot_cor;
-    t_cor         = (1 - factor) * spl.pos_cor + factor * spr.pos_cor;
+    r_cor         = (1 - factor) * spl.rot + factor * spr.rot;
+    t_cor         = (1 - factor) * spl.pos + factor * spr.pos;
     bg            = (1 - factor) * spl.bg + factor * spr.bg;
     ba            = (1 - factor) * spl.ba + factor * spr.ba;
   }
 
   void ComputeStateCorr(
-      const SampleState& sp1,
-      const SampleState& sp2,
-      const double&      timestamp,
-      Vector3d&          r_cor,
-      Vector3d&          t_cor,
-      Vector3d&          bg,
-      Vector3d&          ba) const {
+      const StateCorrection& sp1,
+      const StateCorrection& sp2,
+      const double&          timestamp,
+      Vector3d&              r_cor,
+      Vector3d&              t_cor,
+      Vector3d&              bg,
+      Vector3d&              ba) const {
     CHECK(timestamp >= sp1.timestamp && timestamp <= sp2.timestamp) << std::fixed << std::setprecision(6) << "Timestamp order: " << timestamp << " sp1: " << sp1.timestamp << " sp2: " << sp2.timestamp;
 
-    const SampleState& spl = sp1;
-    const SampleState& spr = sp2;
+    const StateCorrection& spl = sp1;
+    const StateCorrection& spr = sp2;
 
     double factor = (timestamp - spl.timestamp) / (spr.timestamp - spl.timestamp);
-    r_cor         = (1 - factor) * spl.rot_cor + factor * spr.rot_cor;
-    t_cor         = (1 - factor) * spl.pos_cor + factor * spr.pos_cor;
+    r_cor         = (1 - factor) * spl.rot + factor * spr.rot;
+    t_cor         = (1 - factor) * spl.pos + factor * spr.pos;
     bg            = (1 - factor) * spl.bg + factor * spr.bg;
     ba            = (1 - factor) * spl.ba + factor * spr.ba;
   }
 
   void DispatchJacobians(
-      const Eigen::Matrix<double, 12, 12>&                       jacobian_tau,
-      double                                                     timestamp,
-      double                                                     timestamp_sp1,
-      double                                                     timestamp_sp2,
-      double                                                     timestamp_sp3,
-      Eigen::Map<Eigen::Matrix<double, 12, 12, Eigen::RowMajor>> jacobian_sp1,
-      Eigen::Map<Eigen::Matrix<double, 12, 12, Eigen::RowMajor>> jacobian_sp2,
-      Eigen::Map<Eigen::Matrix<double, 12, 12, Eigen::RowMajor>> jacobian_sp3) const {
+      const Eigen::Matrix<double, 12, 12>& jacobian_tau,
+      double                               timestamp,
+      double                               timestamp_sp1,
+      double                               timestamp_sp2,
+      double                               timestamp_sp3,
+      Eigen::Matrix<double, 12, 12>&       jacobian_sp1,
+      Eigen::Matrix<double, 12, 12>&       jacobian_sp2,
+      Eigen::Matrix<double, 12, 12>&       jacobian_sp3) const {
     CHECK((timestamp >= timestamp_sp1 && timestamp < timestamp_sp2) || (timestamp >= timestamp_sp2 && timestamp <= timestamp_sp3));
 
     bool between_sp1_sp2 = (timestamp >= timestamp_sp1 && timestamp < timestamp_sp2);
 
-    auto timestamp_spl = between_sp1_sp2 ? timestamp_sp1 : timestamp_sp2;
-    auto timestamp_spr = between_sp1_sp2 ? timestamp_sp2 : timestamp_sp3;
-    auto jl            = between_sp1_sp2 ? jacobian_sp1 : jacobian_sp2;
-    auto jr            = between_sp1_sp2 ? jacobian_sp2 : jacobian_sp3;
-
-    double factor = (timestamp - timestamp_spl) / (timestamp_spr - timestamp_spl);
-
-    jl += jacobian_tau * (1 - factor);
-    jr += jacobian_tau * factor;
+    if (between_sp1_sp2) {
+      double factor = (timestamp - timestamp_sp1) / (timestamp_sp2 - timestamp_sp1);
+      jacobian_sp1 += jacobian_tau * (1 - factor);
+      jacobian_sp2 += jacobian_tau * factor;
+    } else {
+      double factor = (timestamp - timestamp_sp2) / (timestamp_sp3 - timestamp_sp2);
+      jacobian_sp2 += jacobian_tau * (1 - factor);
+      jacobian_sp3 += jacobian_tau * factor;
+    }
   }
 
   void DispatchJacobians(
-      const Eigen::Matrix<double, 12, 12>&                       jacobian_tau,
-      double                                                     timestamp,
-      double                                                     timestamp_sp1,
-      double                                                     timestamp_sp2,
-      Eigen::Map<Eigen::Matrix<double, 12, 12, Eigen::RowMajor>> jacobian_sp1,
-      Eigen::Map<Eigen::Matrix<double, 12, 12, Eigen::RowMajor>> jacobian_sp2) const {
+      const Eigen::Matrix<double, 12, 12>& jacobian_tau,
+      double                               timestamp,
+      double                               timestamp_sp1,
+      double                               timestamp_sp2,
+      Eigen::Matrix<double, 12, 12>&       jacobian_sp1,
+      Eigen::Matrix<double, 12, 12>&       jacobian_sp2) const {
     CHECK(timestamp >= timestamp_sp1 && timestamp <= timestamp_sp2);
 
-    auto timestamp_spl = timestamp_sp1;
-    auto timestamp_spr = timestamp_sp2;
-    auto jl            = jacobian_sp1;
-    auto jr            = jacobian_sp2;
-
-    double factor = (timestamp - timestamp_spl) / (timestamp_spr - timestamp_spl);
-
-    jl += jacobian_tau * (1 - factor);
-    jr += jacobian_tau * factor;
+    double factor = (timestamp - timestamp_sp1) / (timestamp_sp2 - timestamp_sp1);
+    jacobian_sp1 += jacobian_tau * (1 - factor);
+    jacobian_sp2 += jacobian_tau * factor;
   }
 
   Matrix3d F(const Quaterniond& L, const Quaterniond& R, const Vector3d& r) const {
     return Jr_inv(Log(L * Exp(r) * R)) * R.conjugate().matrix() * Jr(r);
   }
 
-  SampleState ToSampleState(const double* const parameters, double timestamp) const {
-    SampleState sp;
-    sp.timestamp = timestamp;
-    sp.rot_cor   = Eigen::Map<const Eigen::Matrix<double, 3, 1>>(parameters);
-    sp.pos_cor   = Eigen::Map<const Eigen::Matrix<double, 3, 1>>(parameters + 3);
-    sp.bg        = Eigen::Map<const Eigen::Matrix<double, 3, 1>>(parameters + 6);
-    sp.ba        = Eigen::Map<const Eigen::Matrix<double, 3, 1>>(parameters + 9);
-    return sp;
+  void WriteStateJacobians(
+      const Eigen::Matrix<double, 12, 12>& jacobian,
+      double**                             jacobians,
+      int                                  pose_block) const {
+    if (jacobians[pose_block]) {
+      Eigen::Map<Eigen::Matrix<double, 12, 6, Eigen::RowMajor>> pose_jacobian{jacobians[pose_block]};
+      pose_jacobian = jacobian.leftCols<6>();
+    }
+    if (jacobians[pose_block + 1]) {
+      Eigen::Map<Eigen::Matrix<double, 12, 6, Eigen::RowMajor>> bias_jacobian{jacobians[pose_block + 1]};
+      bias_jacobian = jacobian.rightCols<6>();
+    }
+  }
+
+  StateCorrection ToStateCorrection(const double* const pose, const double* const biases, double timestamp) const {
+    return {
+        timestamp,
+        Eigen::Map<const Vector3d>(pose),
+        Eigen::Map<const Vector3d>(pose + 3),
+        Eigen::Map<const Vector3d>(biases),
+        Eigen::Map<const Vector3d>(biases + 3),
+    };
   }
 
  private:
