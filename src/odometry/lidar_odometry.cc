@@ -546,17 +546,20 @@ void LidarOdometry::AddLidarScan(const pcl::PointCloud<hilti_ros::Point>::Ptr &m
   UpdateSurfelPoses(imu_states_sld_win_, surfels_sld_win_);
   stage_times[3] = elapsed_seconds(stage_start);
 
+  KnnSurfelMatcher surfel_matcher_fix_win(num_threads_);
+  stage_start = Clock::now();
+  surfel_matcher_fix_win.BuildIndex(surfels_fix_win_);
+  stage_times[4] += elapsed_seconds(stage_start);
+
   for (int iter_num = 0; iter_num < config_.outer_iter_num_max; ++iter_num) {
     std::vector<SurfelCorrespondence> surfel_corrs_sld, surfel_corrs_fix;
 
     // 5. match surfels in windows
     stage_start = Clock::now();
-    KnnSurfelMatcher surfel_matcher_sld_win;
+    KnnSurfelMatcher surfel_matcher_sld_win(num_threads_);
     surfel_matcher_sld_win.BuildIndex(surfels_sld_win_);
     surfel_matcher_sld_win.Match(surfels_sld_win_, surfel_corrs_sld);
 
-    KnnSurfelMatcher surfel_matcher_fix_win;
-    surfel_matcher_fix_win.BuildIndex(surfels_fix_win_);
     surfel_matcher_fix_win.Match(surfels_sld_win_, surfel_corrs_fix);
     stage_times[4] += elapsed_seconds(stage_start);
 
@@ -592,16 +595,18 @@ void LidarOdometry::AddLidarScan(const pcl::PointCloud<hilti_ros::Point>::Ptr &m
         option.sparse_linear_algebra_library_type = ceres::CUDA_SPARSE;
         break;
       case SolverType::DenseLapack:
-        option.linear_solver_type = ceres::DENSE_NORMAL_CHOLESKY;
+        option.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
+        option.sparse_linear_algebra_library_type = ceres::NO_SPARSE;
         option.dense_linear_algebra_library_type = ceres::LAPACK;
         break;
       case SolverType::DenseCuda:
-        option.linear_solver_type = ceres::DENSE_NORMAL_CHOLESKY;
+        option.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
+        option.sparse_linear_algebra_library_type = ceres::NO_SPARSE;
         option.dense_linear_algebra_library_type = ceres::CUDA;
         break;
     }
     option.max_num_iterations           = config_.inner_iter_num_max;
-    option.num_threads                  = solver_num_threads_;
+    option.num_threads                  = num_threads_;
     ceres::Solver::Summary summary;
     static auto            g_first_sample_state = sample_states_sld_win_[0];
     if (sample_states_sld_win_[0] == g_first_sample_state) {
@@ -649,10 +654,10 @@ void LidarOdometry::AddImuData(const ImuData &msg) {
   this->imu_buff_.push_back(msg_new);
 }
 
-LidarOdometry::LidarOdometry(int solver_num_threads, SolverType solver_type)
-    : solver_num_threads_(solver_num_threads),
+LidarOdometry::LidarOdometry(int num_threads, SolverType solver_type)
+    : num_threads_(num_threads),
       solver_type_(solver_type) {
-  CHECK_GT(solver_num_threads_, 0);
+  CHECK_GT(num_threads_, 0);
 }
 
 LidarOdometry::TimingAverages LidarOdometry::GetTimingAverages() const {

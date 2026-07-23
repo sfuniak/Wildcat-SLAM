@@ -1,15 +1,28 @@
 #include "knn_surfel_matcher.h"
 
+#include <absl/container/flat_hash_set.h>
+
+#include <algorithm>
+
+#include "common/parallel_for.h"
+
+KnnSurfelMatcher::KnnSurfelMatcher(int num_threads) : num_threads_(num_threads) {
+  CHECK_GT(num_threads_, 0);
+}
+
 void KnnSurfelMatcher::BuildIndex(const std::deque<Surfel::Ptr> &surfels) {
   if (surfels.empty()) {
     return;
   }
   target_surfels_ = surfels;
-  std::vector<FloatType> cloud;
-  for (auto &surfel : target_surfels_) {
-    std::vector<FloatType> vec = ToVector(surfel);
-    cloud.insert(cloud.end(), vec.begin(), vec.end());
-  }
+  std::vector<FloatType> cloud(target_surfels_.size() * dim_);
+  ParallelFor(target_surfels_.size(), num_threads_, [&](std::size_t index) {
+    const auto center = target_surfels_[index]->GetCenterInWorld() / kCenterDistThreshold;
+    const auto norm   = target_surfels_[index]->GetNormInWorld() / kAngularDistThreshold;
+    const auto offset = index * dim_;
+    Eigen::Map<Vector3d>(cloud.data() + offset)     = center;
+    Eigen::Map<Vector3d>(cloud.data() + offset + 3) = norm;
+  });
   this->FLANNBuildIndex(cloud);
 }
 
@@ -18,11 +31,14 @@ void KnnSurfelMatcher::Match(std::deque<Surfel::Ptr> &surfels, std::vector<Surfe
   if (target_surfels_.empty()) {
     return;
   }
-  std::set<std::pair<Surfel::Ptr, Surfel::Ptr>> surfel_pairs;
-  for (auto &surfel : surfels) {
-    std::vector<Surfel::Ptr> k_nearest_surfels;
-    this->KNearestSearch(surfel, kNearestSurfelCandidatesNum, k_nearest_surfels);
-    for (auto &nearest_surfel : k_nearest_surfels) {
+
+  std::vector<std::vector<int>> candidate_indices(surfels.size());
+  ParallelFor(surfels.size(), num_threads_, [&](std::size_t index) {
+    const auto &surfel = surfels[index];
+    std::vector<int> k_indices;
+    this->KNearestSearchIndices(surfel, kNearestSurfelCandidatesNum, k_indices);
+    for (const int nearest_index : k_indices) {
+      const auto &nearest_surfel = target_surfels_[nearest_index];
       if (std::abs(nearest_surfel->timestamp - surfel->timestamp) < kTimeDiffThreshold) {
         continue;
       }
@@ -32,11 +48,23 @@ void KnnSurfelMatcher::Match(std::deque<Surfel::Ptr> &surfels, std::vector<Surfe
       if (std::abs(surfel->GetNormInWorld().dot(surfel->GetCenterInWorld() - nearest_surfel->GetCenterInWorld())) > kSurfelDistThreshold) {
         continue;
       }
-      if (surfel_pairs.find({surfel, nearest_surfel}) != surfel_pairs.end() ||
-          surfel_pairs.find({nearest_surfel, surfel}) != surfel_pairs.end()) {
+      candidate_indices[index].push_back(nearest_index);
+    }
+  });
+
+  const bool same_surfel_set =
+      surfels.size() == target_surfels_.size() &&
+      std::equal(surfels.begin(), surfels.end(), target_surfels_.begin());
+  absl::flat_hash_set<std::pair<int, int>> surfel_pairs;
+  surfel_pairs.reserve(surfels.size());
+  for (std::size_t index = 0; index < surfels.size(); ++index) {
+    const auto &surfel = surfels[index];
+    for (const int nearest_index : candidate_indices[index]) {
+      const auto &nearest_surfel = target_surfels_[nearest_index];
+      const std::pair<int, int> pair = std::minmax(static_cast<int>(index), nearest_index);
+      if (same_surfel_set && !surfel_pairs.insert(pair).second) {
         continue;
       }
-      surfel_pairs.insert({surfel, nearest_surfel});
 
       if (surfel->timestamp < nearest_surfel->timestamp) {
         surfels_corrs.push_back({surfel, nearest_surfel});
@@ -49,17 +77,20 @@ void KnnSurfelMatcher::Match(std::deque<Surfel::Ptr> &surfels, std::vector<Surfe
 }
 
 void KnnSurfelMatcher::KNearestSearch(const Surfel::Ptr &surfel, int k, std::vector<Surfel::Ptr> &k_nearest_surfels) {
+  std::vector<int> k_indices;
+  this->KNearestSearchIndices(surfel, k, k_indices);
+  for (const int index : k_indices) {
+    k_nearest_surfels.push_back(target_surfels_[index]);
+  }
+}
+
+void KnnSurfelMatcher::KNearestSearchIndices(const Surfel::Ptr &surfel, int k, std::vector<int> &k_indices) {
   std::vector<FloatType> query = ToVector(surfel);
   CHECK_EQ(query.size(), dim_);
 
-  std::vector<int>       k_indices;
   std::vector<FloatType> k_distances;
 
   this->FLANNKNearestSearch(query, k, k_indices, k_distances);
-
-  for (int i = 0; i < k; ++i) {
-    k_nearest_surfels.push_back(target_surfels_[k_indices[i]]);
-  }
 }
 
 void KnnSurfelMatcher::FLANNBuildIndex(const std::vector<FloatType> &cloud) {

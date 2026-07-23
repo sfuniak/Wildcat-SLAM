@@ -43,7 +43,7 @@ class LidarOdometry {
     std::size_t sweep_count = 0;
   };
 
-  explicit LidarOdometry(int solver_num_threads = 1, SolverType solver_type = SolverType::SuiteSparse);
+  explicit LidarOdometry(int num_threads = 1, SolverType solver_type = SolverType::SuiteSparse);
 
   /**
    * @brief Add raw imu measurements to queue
@@ -100,7 +100,7 @@ class LidarOdometry {
   std::deque<hilti_ros::Point> points_buff_;
 
   int sweep_id_ = 0;
-  int solver_num_threads_ = 1;
+  int num_threads_ = 1;
   SolverType solver_type_ = SolverType::SuiteSparse;
   std::array<double, 8> stage_time_totals_{};
 };

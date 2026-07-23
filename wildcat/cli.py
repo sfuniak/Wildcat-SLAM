@@ -131,10 +131,10 @@ def main() -> None:
     parser.add_argument("--lidar-topic", default="/hesai/pandar")
     parser.add_argument("--imu-rate", type=int, default=200)
     parser.add_argument(
-        "--solver-threads",
+        "--threads",
         type=int,
         default=1,
-        help="Number of Ceres residual/Jacobian evaluation threads (default: 1)",
+        help="Number of matcher and Ceres evaluation threads (default: 1)",
     )
     parser.add_argument(
         "--solver",
@@ -149,12 +149,12 @@ def main() -> None:
 
     import wildcat_slam  # pylint: disable=import-error,import-outside-toplevel
 
-    if args.solver_threads < 1:
-        parser.error("--solver-threads must be at least 1")
+    if args.threads < 1:
+        parser.error("--threads must be at least 1")
 
     processor = wildcat_slam.Processor(
         args.imu_rate,
-        args.solver_threads,
+        args.threads,
         args.solver,
     )
     visualizer = RerunVisualizer() if args.visualize else None

@@ -14,6 +14,8 @@ class KnnSurfelMatcher {
   using FloatType  = double;
   using FLANNIndex = flann::Index<flann::L2_Simple<FloatType>>;
 
+  explicit KnnSurfelMatcher(int num_threads = 1);
+
   void BuildIndex(const std::deque<Surfel::Ptr> &surfels);
 
   void Match(std::deque<Surfel::Ptr> &surfels, std::vector<SurfelCorrespondence> &surfels_corrs);
@@ -21,6 +23,8 @@ class KnnSurfelMatcher {
   void KNearestSearch(const Surfel::Ptr &surfel, int k, std::vector<Surfel::Ptr> &k_nearest_surfels);
 
  private:
+  void KNearestSearchIndices(const Surfel::Ptr &surfel, int k, std::vector<int> &k_indices);
+
   void FLANNBuildIndex(const std::vector<FloatType> &cloud);
 
   void FLANNKNearestSearch(std::vector<FloatType> &query, int k, std::vector<int> &k_indices, std::vector<FloatType> &k_distances);
@@ -33,6 +37,7 @@ class KnnSurfelMatcher {
   std::vector<FloatType>      cloud_;
   std::shared_ptr<FLANNIndex> index_;
   int                         dim_ = 6;
+  int                         num_threads_;
 
   static constexpr double kCenterDistThreshold        = 1.0;
   static constexpr double kAngularDistThreshold       = 5.0 * M_PI / 180.0;

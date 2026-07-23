@@ -11,8 +11,8 @@ namespace py = pybind11;
 
 class WildcatProcessor {
  public:
-  explicit WildcatProcessor(int imu_rate, int solver_threads, const std::string &solver_type)
-      : odometry_(make_odometry(solver_threads, solver_type)), imu_resampler_(imu_rate) {}
+  explicit WildcatProcessor(int imu_rate, int num_threads, const std::string &solver_type)
+      : odometry_(make_odometry(num_threads, solver_type)), imu_resampler_(imu_rate) {}
 
   void add_imu(double timestamp,
                py::array_t<double, py::array::c_style | py::array::forcecast> linear_acceleration,
@@ -152,29 +152,29 @@ class WildcatProcessor {
   }
 
  private:
-  static std::shared_ptr<LidarOdometry> make_odometry(int solver_threads, const std::string &solver_type) {
+  static std::shared_ptr<LidarOdometry> make_odometry(int num_threads, const std::string &solver_type) {
     using SolverType = LidarOdometry::SolverType;
 
-    if (solver_threads < 1) {
-      throw std::invalid_argument("solver_threads must be at least 1");
+    if (num_threads < 1) {
+      throw std::invalid_argument("num_threads must be at least 1");
     }
     if (solver_type == "suite") {
-      return std::make_shared<LidarOdometry>(solver_threads, SolverType::SuiteSparse);
+      return std::make_shared<LidarOdometry>(num_threads, SolverType::SuiteSparse);
     }
     if (solver_type == "eigen") {
-      return std::make_shared<LidarOdometry>(solver_threads, SolverType::EigenSparse);
+      return std::make_shared<LidarOdometry>(num_threads, SolverType::EigenSparse);
     }
     if (solver_type == "accelerate") {
-      return std::make_shared<LidarOdometry>(solver_threads, SolverType::AccelerateSparse);
+      return std::make_shared<LidarOdometry>(num_threads, SolverType::AccelerateSparse);
     }
     if (solver_type == "cuda") {
-      return std::make_shared<LidarOdometry>(solver_threads, SolverType::CudaSparse);
+      return std::make_shared<LidarOdometry>(num_threads, SolverType::CudaSparse);
     }
     if (solver_type == "dense-lapack") {
-      return std::make_shared<LidarOdometry>(solver_threads, SolverType::DenseLapack);
+      return std::make_shared<LidarOdometry>(num_threads, SolverType::DenseLapack);
     }
     if (solver_type == "dense-cuda") {
-      return std::make_shared<LidarOdometry>(solver_threads, SolverType::DenseCuda);
+      return std::make_shared<LidarOdometry>(num_threads, SolverType::DenseCuda);
     }
     throw std::invalid_argument(
         "solver_type must be one of: suite, eigen, accelerate, cuda, dense-lapack, dense-cuda");
@@ -189,7 +189,7 @@ PYBIND11_MODULE(wildcat_slam, module) {
   py::class_<WildcatProcessor>(module, "Processor")
       .def(py::init<int, int, const std::string &>(),
            py::arg("imu_rate") = 200,
-           py::arg("solver_threads") = 1,
+           py::arg("num_threads") = 1,
            py::arg("solver_type") = "suite")
       .def("add_imu", &WildcatProcessor::add_imu,
            py::arg("timestamp"), py::arg("linear_acceleration"), py::arg("angular_velocity"))

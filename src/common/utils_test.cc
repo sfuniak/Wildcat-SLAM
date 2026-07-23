@@ -1,6 +1,19 @@
 #include <gtest/gtest.h>
 
+#include "parallel_for.h"
 #include "utils.h"
+
+TEST(Utils, ParallelForVisitsEachIndexOnce) {
+  std::vector<int> visits(100, 0);
+
+  ParallelFor(visits.size(), 4, [&](std::size_t index) {
+    ++visits[index];
+  });
+
+  for (const int visit_count : visits) {
+    EXPECT_EQ(visit_count, 1);
+  }
+}
 
 TEST(Utils, Jl_Jl_inv) {
   Vector3d v{1, 2, 3};
